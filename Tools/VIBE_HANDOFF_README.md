@@ -14,9 +14,9 @@ metadata and GitHub release data. It fails if stale. It never commits, pushes,
 tags, creates/releases assets, triggers Actions, touches application code or
 installs Git hooks.
 
-This first rollout only prepares local copies of updated handoffs and tests the
-tool on the user's Mac. Release-script wiring and hook installation are a
-separate validated step. It is not yet an unattended end-to-end solution.
+The first rollout prepared generated handoff facts only. The second rollout
+installs local commit hooks and integrates the known Sparkle release scripts.
+Human feature decisions, tests, and external publication remain separately verified.
 
 ## Workflow after full rollout
 
@@ -25,8 +25,25 @@ separate validated step. It is not yet an unattended end-to-end solution.
 3. Run `update`, stage the handoff, run `check`, inspect diff, commit/push.
 4. After publication, verify release and update feed, refresh handoffs in the
    source and updates repos with documentation-only commits.
-5. Future optional commit hooks can run `check` as a safety net; don't overwrite
-   existing hooks or assume this substitutes for testing.
+5. The opt-in per-checkout commit hook now updates the generated facts
+   automatically, but never substitutes for testing or manual development notes.
 
 Other instructions in each repository retain precedence for project-specific
 build commands, manual validation, and release signing.
+
+
+## Local commit/release integration (2026-10-19)
+
+Each Vibe Coding repository now tracks `Tools/vibe_handoff.py`,
+`.githooks/pre-commit` and `.githooks/install.sh`. Run the installer
+once in each clean checkout to activate the local pre-commit hook.
+The hook synchronizes only the generated handoff section with staged
+source metadata and the authenticated GitHub release API. It refuses
+unstaged handoff edits and unverified remote release status. It does
+not verify builds or replace human-maintained feature/bug context.
+
+Existing Sparkle release scripts for Draftava, Doit Then and ToMP4
+are integrated for update-repo and post-publication source handoffs.
+For other projects, release publication still requires manually
+verifying the external channel and then committing the updated handoff.
+No GitHub Actions are run automatically.

@@ -36,6 +36,14 @@ def index_text(root, path):
         return None
 
 
+def index_text_exact(root, path):
+    result = subprocess.run(['git', 'show', f':{path}'], cwd=root, text=True,
+                            capture_output=True)
+    if result.returncode:
+        raise RuntimeError('Missing staged file: ' + path)
+    return result.stdout
+
+
 def source_metadata(root, names):
     """Read only staged/tracked sources; report unknown instead of guessing."""
     metadata = []
@@ -171,7 +179,25 @@ def run(root, operation, offline=False):
         if cmd('git', 'diff', '--', HANDOFF, cwd=root):
             raise RuntimeError('Handoff has unrelated unstaged edits; do not overwrite')
     release = 'Unverified (offline validation)' if offline else latest_release(repo)
+    if operation in ('sync-staged', 'check-staged') and not offline and release.startswith('Unverified:'):
+        raise RuntimeError('Cannot refresh staged handoff while GitHub release status is unverified')
     rendered = block(repo, branch, source_metadata(root, names), release)
+    if operation in ('sync-staged', 'check-staged'):
+        staged_text = index_text_exact(root, HANDOFF)
+        if operation == 'check-staged':
+            if replace_section(staged_text, rendered) != staged_text:
+                raise RuntimeError(f'{repo}: staged handoff facts are stale')
+            return f'PASS: {repo}: staged handoff matches indexed source and release'
+        if old != staged_text:
+            raise RuntimeError('Handoff has unstaged changes; stage them manually before committing')
+        changed = replace_section(staged_text, rendered)
+        if changed != staged_text:
+            path.write_text(changed, encoding='utf-8')
+            cmd('git', 'add', '--', HANDOFF, cwd=root)
+        if index_text_exact(root, HANDOFF) != changed:
+            raise RuntimeError('Handoff did not stage correctly')
+        return f'PASS: {repo}: handoff generated facts synchronized with staged source'
+
     updated = replace_section(old, rendered)
     if operation == 'check':
         if old != updated:
@@ -184,7 +210,7 @@ def run(root, operation, offline=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('update', 'check'))
+    parser.add_argument('action', choices=('update', 'check', 'sync-staged', 'check-staged'))
     parser.add_argument('checkout', nargs='?', default='.')
     parser.add_argument('--offline', action='store_true', help='Test only; publish state explicitly unverified')
     args = parser.parse_args()
